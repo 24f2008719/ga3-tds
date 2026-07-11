@@ -96,29 +96,44 @@ def normalize_answer(ans):
     return s
 
 # Q2: /answer-image
+# ================= Q2: /answer-image =================
 @app.post("/answer-image")
 async def answer_image(request: Request):
     body = await request.json()
     img_b64 = body.get("image_base64", "")
     question = body.get("question", "")
+    
     messages = [{
         "role": "user",
         "content": [
             {"type": "text", "text":
                 "You read charts, receipts, tables, invoices and pie charts EXACTLY.\n"
                 "Work in steps in a 'work' field, then give the final 'answer':\n"
-                "1. TRANSCRIBE every relevant label and number you see.\n"
-                "2. If arithmetic is needed, compute step by step and double check.\n"
-                "3. Final 'answer': if NUMERIC, output ONLY the bare number. If TEXT, output exactly as written.\n"
+                "1. TRANSCRIBE every relevant label and number you see, one by one "
+                "(e.g. each bar's value, each receipt line, each table cell). Read "
+                "digits carefully; do not round or estimate.\n"
+                "2. If the question needs arithmetic (sum of all bars, grand total, "
+                "max/min of a column, total including tax), compute it step by step "
+                "and DOUBLE-CHECK the sum by re-adding.\n"
+                "3. Final 'answer': if NUMERIC, output ONLY the bare number — no "
+                "currency symbol, no thousands separators, no units, no words. Keep "
+                "decimals exactly as shown (e.g. a money total 4089.35 stays 4089.35). "
+                "If TEXT (e.g. the largest pie category), output it EXACTLY as written "
+                "in the image.\n"
                 "Return JSON: {\"work\": \"...\", \"answer\": \"...\"}.\n"
                 f"Question: {question}"},
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}", "detail": "high"}},
+            {"type": "image_url",
+             "image_url": {"url": f"data:image/png;base64,{img_b64}", "detail": "high"}},
         ],
     }]
+    
     try:
+        # Full gpt-4o at high image detail is required for this.
         out = parse_json(await chat(messages, model=config.VISION_MODEL, max_tokens=1200))
         ans = normalize_answer(out.get("answer", ""))
-    except Exception: ans = ""
+    except Exception as e:
+        ans = ""
+        
     return {"answer": str(ans)}
 
 # Q3 + Q7: /extract
